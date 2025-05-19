@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
 
+import org.springframework.integration.channel.DirectChannel;
+import org.springframework.messaging.MessageChannel;
+import com.google.cloud.spring.pubsub.integration.inbound.PubSubInboundChannelAdapter;
+import org.springframework.beans.factory.annotation.Qualifier;
+
 @SpringBootApplication
 @RestController
 public class GcpPubsubApplication {
@@ -25,6 +30,7 @@ public class GcpPubsubApplication {
 		SpringApplication.run(GcpPubsubApplication.class, args);
 	}
 
+	// Send
 	@MessagingGateway(defaultRequestChannel = "gcpPubsubOutputChannel")
 	public interface GcpPubsubOutboundGateway {
 		void sendToGcpPubsub(String text);
@@ -44,5 +50,28 @@ public class GcpPubsubApplication {
 		this.messagingGateway.sendToGcpPubsub(message);
 		return new RedirectView("/");
 	}
+
+	// Receive
+	@Bean
+	public MessageChannel gcpPubsubInputChannel() {
+		return new DirectChannel();
+	}
+
+	@Bean
+	public PubSubInboundChannelAdapter messageChannelAdapter(
+			@Qualifier("gcpPubsubInputChannel") MessageChannel inputChannel,
+			PubSubTemplate pubSubTemplate) {
+		PubSubInboundChannelAdapter adapter =
+				new PubSubInboundChannelAdapter(pubSubTemplate, "gcp-pubsub-example-sub");
+		adapter.setOutputChannel(inputChannel);
+
+		return adapter;
+	}
+
+	@ServiceActivator(inputChannel = "gcpPubsubInputChannel")
+	public void messageReceiver(String message) {
+		System.out.println("Message received: " + message);
+	}
+
 
 }
